@@ -16,6 +16,13 @@ try:
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
+# Configure page
+st.set_page_config(
+    page_title="Oreana AI Chatbot",
+    page_icon="🎓",
+    layout="wide"
+)
     
 # Loading environment variables
 load_dotenv()
@@ -122,7 +129,66 @@ def load_leads():
                 return []
     return []
 
-# Streamlit UI
+# ============ API HANDLER ============
+query_params = st.query_params
+
+# Handle API requests via query parameters
+if "api" in query_params and "message" in query_params:
+    try:
+        user_message = query_params["message"]
+        
+        # Process the message using existing functions
+        intent = classify_intent(user_message)
+        entities = extract_entities(user_message)
+        
+        # Store lead if valid
+        if intent == "Lead Capture" and any(entities.values()):
+            store_lead(entities)
+        
+        # Generate response
+        if intent == "Lead Capture" and entities["name"]:
+            response = f"Hello {entities['name']}! 👋 Thanks for providing your information. I've saved your details.\n\nWhich course are you interested in? We offer:\n• Technology & Programming\n• Business & Management\n• Creative Design\n• Data Science & AI\n\nHow can I help you choose the right path?"
+        elif llm_available:
+            try:
+                response = chain.invoke({"question": user_message})
+            except Exception as e:
+                fallback_responses = {
+                    "Course Info": "We offer comprehensive courses in Technology, Business, Creative Design, and Data Science. Each program is designed with industry experts to provide practical, job-ready skills. Would you like details about any specific field?",
+                    "Fees": "Our course fees vary by program and duration. We offer flexible payment plans and scholarships. Contact us for detailed pricing: courses start from ₹15,000 to ₹1,50,000 depending on the specialization.",
+                    "Career Advice": "I'd love to help guide your career! What field interests you most? Whether it's tech, business, creative, or data - I can suggest the best learning path and career opportunities.",
+                    "General": "I'm here to help with information about our courses, fees, and career guidance. What would you like to know more about?"
+                }
+                response = fallback_responses.get(intent, "I'm here to help with your educational journey!")
+        else:
+            fallback_responses = {
+                "Course Info": "We offer comprehensive courses in Technology, Business, Creative Design, and Data Science. Each program includes hands-on projects and industry mentorship.",
+                "Fees": "Our course fees range from ₹15,000 to ₹1,50,000 based on the program. We offer EMI options and scholarships for deserving students.",
+                "Career Advice": "I'd be happy to guide your career path! What field interests you? Technology, Business, Creative, or Data Science?",
+                "General": "Welcome to Oreana! I can help you with course information, fees, and career guidance. What would you like to know?"
+            }
+            response = fallback_responses.get(intent, "I'm here to help with your educational journey!")
+        
+        # Return API response
+        api_response = {
+            "intent": intent,
+            "entities": entities,
+            "response": response,
+            "status": "success"
+        }
+        
+        st.json(api_response)
+        st.stop()  # Stop here for API calls
+        
+    except Exception as e:
+        error_response = {
+            "error": str(e),
+            "status": "error"
+        }
+        st.json(error_response)
+        st.stop()
+# ============ END API HANDLER ============
+
+# Streamlit UI (only shows if not API call)
 st.title("🎓 Oreana AI Chatbot")
 st.caption("Your AI Assistant for Course Information & Career Guidance")
 
@@ -164,7 +230,7 @@ if user_input:
                 "Career Advice": "I'd love to help guide your career! What field interests you most? Whether it's tech, business, creative, or data - I can suggest the best learning path and career opportunities.",
                 "General": "I'm here to help with information about our courses, fees, and career guidance. What would you like to know more about?"
             }
-            response = fallback_responses.get(intent, "I'm here to help! Ask me about courses, fees, or career advice.")
+            response = fallback_responses.get(intent, fallback_responses.get("General", "I'm here to help with your educational journey!"))
     else:
         # Fallback when LLM is not available
         fallback_responses = {
@@ -212,3 +278,11 @@ st.sidebar.markdown("✅ Intent Classification")
 st.sidebar.markdown("✅ Entity Extraction") 
 st.sidebar.markdown("✅ Lead Capture")
 st.sidebar.markdown("✅ AI Responses")
+st.sidebar.markdown("✅ API Endpoint")
+
+# API Usage Instructions
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔗 API Usage:")
+st.sidebar.markdown("Add `?api=true&message=your_question` to the URL")
+st.sidebar.markdown("Example:")
+st.sidebar.code("https://your-app.streamlit.app/?api=true&message=Tell me about courses")
