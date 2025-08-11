@@ -24,6 +24,14 @@ os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
 
+# --- FIX for Render deployment issue with read-only filesystem ---
+# This redirects Cargo's home and pip's cache directory to a writable location
+# This is necessary because some dependencies (like Matplotlib which uses Rust)
+# try to write to a read-only directory during the build process.
+os.environ['CARGO_HOME'] = '/tmp/cargo'
+os.environ['PIP_CACHE_DIR'] = '/tmp/pip_cache'
+# --- END FIX ---
+
 # Dummy intent data for training
 intent_data = {
     "Course Info": ["Tell me about courses", "What courses do you offer?", "Give me course details"],
